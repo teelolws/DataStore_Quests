@@ -1,0 +1,8 @@
+package-as: DataStore_Quests
+
+move-folders:
+ DataStore_Quests/DataStore_Quests: DataStore_Quests
+
+ignore:
+ - LICENCE.md
+ - README.md
