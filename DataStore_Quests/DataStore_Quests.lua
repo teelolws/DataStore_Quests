@@ -1,6 +1,5 @@
 --[[	*** DataStore_Quests ***
 Written by : Thaoky, EU-Marécages de Zangar
-July 8th, 2009
 --]]
 
 if not DataStore then return end
@@ -21,6 +20,7 @@ local AddonDB_Defaults = {
 			TrackTurnIns = true,					-- by default, save the ids of completed quests in the history
 			AutoUpdateHistory = true,			-- if history has been queried at least once, auto update it at logon (fast operation - already in the game's cache)
 			DailyResetHour = 3,					-- Reset dailies at 3am (default value)
+            ManuallyTrackedQuests = {},     -- a user defined table of Quest IDs that the player wants to track, should be used for "hidden" quests that aren't tracked on completion like Warfront weeklies
 		},
 		Characters = {
 			['*'] = {				-- ["Account.Realm.Name"]
@@ -382,24 +382,26 @@ local function ScanQuests()
 		end
 	end
     
-    for questID, _ in pairs(regularZoneQuests) do
-        -- initialize the saved variable if needed
-        if not savedRegularZoneQuests then savedRegularZoneQuests = {} end
-        local objective, _, _, numFulfilled, numRequired
-        if C_QuestLog.IsQuestTask(questID) then
-            objective = GetQuestObjectiveInfo(questID, 1, false)
-            numFulfilled = C_TaskQuest.GetQuestProgressBarInfo(questID)
-            numRequired = 100
-        else
-            objective, _, _, numFulfilled, numRequired = GetQuestObjectiveInfo(questID, 1, false)
+    for _, q in pairs({regularZoneQuests, ManuallyTrackedQuests}) do
+        for questID, _ in pairs(q) do
+            -- initialize the saved variable if needed
+            if not savedRegularZoneQuests then savedRegularZoneQuests = {} end
+            local objective, _, _, numFulfilled, numRequired
+            if C_QuestLog.IsQuestTask(questID) then
+                objective = GetQuestObjectiveInfo(questID, 1, false)
+                numFulfilled = C_TaskQuest.GetQuestProgressBarInfo(questID)
+                numRequired = 100
+            else
+                objective, _, _, numFulfilled, numRequired = GetQuestObjectiveInfo(questID, 1, false)
+            end
+            -- if the current character has completed the quest already, then C_TaskQuest.GetQuestTimeLeftMinutes(questID) will return nil, so we can't give an accurate time remaining
+            local timeRemaining = C_TaskQuest.GetQuestTimeLeftMinutes(questID)
+    
+            if (not C_QuestLog.IsQuestFlaggedCompleted(questID)) and (not C_QuestSession.Exists()) then
+                savedRegularZoneQuests[questID] = format("%d|%d|%s|%d|%s", timeRemaining, numRequired, objective or "", time(), C_TaskQuest.GetQuestInfoByQuestID(questID))
+            end
+            char.RegularZoneQuests[questID] = {["numFulfilled"] = numFulfilled}    
         end
-        -- if the current character has completed the quest already, then C_TaskQuest.GetQuestTimeLeftMinutes(questID) will return nil, so we can't give an accurate time remaining
-        local timeRemaining = C_TaskQuest.GetQuestTimeLeftMinutes(questID)
-
-        if (not C_QuestLog.IsQuestFlaggedCompleted(questID)) and (not C_QuestSession.Exists()) then
-            savedRegularZoneQuests[questID] = format("%d|%d|%s|%d|%s", timeRemaining, numRequired, objective or "", time(), C_TaskQuest.GetQuestInfoByQuestID(questID))
-        end
-        char.RegularZoneQuests[questID] = {["numFulfilled"] = numFulfilled}    
     end
 
 	RestoreHeaders()
@@ -713,6 +715,12 @@ local function _IterateQuests(character, category, callback)
 	end
 end
 
+-- Do NOT wipe!
+-- Only add Quest IDs to this.
+local function _GetManuallyTrackedQuests()
+    return GetOption("ManuallyTrackedQuests")
+end
+
 local PublicMethods = {
 	GetQuestLogSize = _GetQuestLogSize,
 	GetQuestLogInfo = _GetQuestLogInfo,
@@ -737,6 +745,7 @@ local PublicMethods = {
 	IterateQuests = _IterateQuests,
     IsQuestEmissary = _IsQuestEmissary,
     GetCallingQuests = _GetCallingQuests,
+    GetManuallyTrackedQuests = _GetManuallyTrackedQuests,
 }
 
 function addon:OnInitialize()
@@ -777,6 +786,8 @@ function addon:OnEnable()
 	-- Daily Reset Drop Down & label
 	local frame = DataStore.Frames.QuestsOptions.DailyResetDropDownLabel
 	frame:SetText(format("|cFFFFFFFF%s:", L["DAILY_QUESTS_RESET_LABEL"]))
+    
+    DataStore.Frames.QuestsOptions.AddQuestEditBoxLabel:SetText("Hidden Quest Tracking: Enter the Quest ID of a hidden quest you want to force tracking of.") -- TODO: Localize this
 
 	frame = DataStore_Quests_DailyResetDropDown
 	UIDropDownMenu_SetWidth(frame, 60) 
