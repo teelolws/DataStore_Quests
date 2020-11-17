@@ -1,4 +1,4 @@
-## Interface: 90001
+## Interface: 90002
 ## Title: DataStore_Quests
 ## Notes: Stores information about character quests
 ## Author: Thaoky (EU-Marécages de Zangar)
