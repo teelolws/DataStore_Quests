@@ -424,7 +424,10 @@ local function ScanCallings(callings)
         if calling then
             local questID = calling.questID
             local timeRemaining = C_TaskQuest.GetQuestTimeLeftSeconds(calling.questID) or 0
-            savedCallings[questID] = timeRemaining
+            savedCallings[questID] = {
+                    ['timeRemaining'] = timeRemaining,
+                    ['icon'] = calling.icon,
+                }
         end
     end
 end
@@ -612,6 +615,18 @@ local function _GetRegularZoneQuests()
 end
 
 local function _GetCallingQuests(character)
+    -- check expired
+    local callings = character.Callings
+    for questID, calling in pairs(callings) do
+        if type(calling) ~= "table" then
+            -- data changed from number containing only time remaining to a table, invalidate old data
+            callings[questID] = nil
+        elseif (character.lastUpdate + calling.timeRemaining) < time() then
+            -- calling is expired, remove it
+            callings[questID] = nil
+        end
+    end
+    
     return character.Callings
 end
 
